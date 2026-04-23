@@ -1,0 +1,34 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+
+import { authRouter } from './routes/auth';
+import { usersRouter } from './routes/users';
+import { adminRouter } from './routes/admin';
+
+const app = express();
+const PORT = parseInt(process.env.PORT ?? '5000', 10);
+
+// ── Middleware ────────────────────────────────────────
+app.use(helmet());
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
+app.use(express.json());
+app.use(morgan('combined'));
+
+// ── Health ────────────────────────────────────────────
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'player-service', timestamp: new Date().toISOString() });
+});
+
+// ── Routes ────────────────────────────────────────────
+app.use('/auth', authRouter);
+app.use('/users', usersRouter);
+app.use('/admin', adminRouter);
+
+// ── Start ─────────────────────────────────────────────
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[player-service] Listening on port ${PORT}`);
+});
+
+export default app;

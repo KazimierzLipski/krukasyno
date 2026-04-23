@@ -1,0 +1,60 @@
+---
+# ======================================================
+# VPS1 Playbook – Public Node
+# Installs Docker, deploys nginx + frontend + api-gateway
+# ======================================================
+
+- name: Configure VPS1 (Public Node)
+  hosts: vps1
+  become: true
+  vars_files:
+    - vars/secrets.yml   # encrypted with ansible-vault
+  roles:
+    - common
+    - docker
+
+  tasks:
+    - name: Create app directory
+      ansible.builtin.file:
+        path: /opt/krukasyno
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Copy project files to VPS1
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: /opt/krukasyno/
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=.next"
+          - "--exclude=__pycache__"
+
+    - name: Template .env file
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: /opt/krukasyno/.env
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+
+    - name: Build and start VPS1 services
+      community.docker.docker_compose_v2:
+        project_src: /opt/krukasyno
+        files:
+          - docker-compose.vps1.yml
+        state: present
+        build: always
+      environment:
+        BACKEND_HOST: "{{ backend_host }}"
+
+    - name: Wait for frontend health
+      ansible.builtin.uri:
+        url: http://localhost/
+        status_code: 200
+      retries: 10
+      delay: 10
+      register: result
+      until: result.status == 200

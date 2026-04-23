@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --gold: #F59E0B;
+  --gold-light: #FCD34D;
+  --casino-green: #064E3B;
+  --casino-dark: #0a0a0f;
+}
+
+body {
+  background-color: var(--casino-dark);
+  color: white;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Card styles */
+.playing-card {
+  border-radius: 8px;
+  border: 2px solid #374151;
+  background: white;
+  color: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  transition: transform 0.15s ease;
+}
+
+.playing-card.red { color: #DC2626; }
+.playing-card.face-down { background: #1E3A5F; color: white; }
+
+/* Gold button */
+.btn-gold {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #111;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.625rem 1.5rem;
+  transition: opacity 0.15s, transform 0.1s;
+  border: none;
+  cursor: pointer;
+}
+.btn-gold:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Felt table */
+.casino-table {
+  background: radial-gradient(ellipse at center, #065F46 0%, #022C22 100%);
+  border: 4px solid #92400E;
+  border-radius: 24px;
+}

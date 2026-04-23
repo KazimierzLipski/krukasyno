@@ -1,0 +1,187 @@
+version: '3.8'
+
+# ======================================================
+# KruKasyno – Full Stack Docker Compose (local dev)
+# All services on a single compose for local development.
+# For production: use docker-compose.vps1.yml + vps2.yml
+# ======================================================
+
+services:
+
+  # ── Public Tier (VPS1) ───────────────────────────────
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "5000:80"
+    depends_on:
+      - frontend
+      - api-gateway
+    networks:
+      - public-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api}
+    environment:
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:5000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - AUTH_GOOGLE_ID=${AUTH_GOOGLE_ID}
+      - AUTH_GOOGLE_SECRET=${AUTH_GOOGLE_SECRET}
+      - API_GATEWAY_URL=http://api-gateway:4000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost/api}
+    depends_on:
+      - api-gateway
+    networks:
+      - public-net
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET}
+      - PLAYER_SERVICE_URL=http://player-service:5000
+      - GAME_SERVICE_URL=http://game-service:6100
+      - WALLET_SERVICE_URL=http://wallet-service:7000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    depends_on:
+      player-service:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+      wallet-service:
+        condition: service_healthy
+    networks:
+      - public-net
+      - private-net
+    restart: unless-stopped
+
+  # ── Private Tier (VPS2) ──────────────────────────────
+
+  player-service:
+    build:
+      context: ./player-service
+      dockerfile: Dockerfile
+    environment:
+      - PORT=5000
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/player_db
+      - JWT_SECRET=${JWT_SECRET}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - WALLET_SERVICE_URL=http://wallet-service:7000
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  game-service:
+    build:
+      context: ./game-service
+      dockerfile: Dockerfile
+    environment:
+      - PORT=6100
+      - REDIS_URL=redis://redis:6379
+      - PLAYER_SERVICE_URL=http://player-service:5000
+      - WALLET_SERVICE_URL=http://wallet-service:7000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+      player-service:
+        condition: service_healthy
+      wallet-service:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6100/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  wallet-service:
+    build:
+      context: ./wallet-service
+      dockerfile: Dockerfile
+    environment:
+      - PORT=7000
+      - DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/wallet_db
+      - REDIS_URL=redis://redis:6379
+      - PLAYER_SERVICE_URL=http://player-service:5000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=player_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "3306:3306"   # exposed only for local dev
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"   # exposed only for local dev
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  public-net:
+    driver: bridge
+  private-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:

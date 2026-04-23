@@ -1,0 +1,76 @@
+---
+# ======================================================
+# VPS2 Playbook – Private Node
+# Installs Docker, deploys microservices, MySQL, Redis
+# ======================================================
+
+- name: Configure VPS2 (Private Node)
+  hosts: vps2
+  become: true
+  vars_files:
+    - vars/secrets.yml
+  roles:
+    - common
+    - docker
+
+  tasks:
+    - name: Create app directory
+      ansible.builtin.file:
+        path: /opt/krukasyno
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Copy project files to VPS2
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: /opt/krukasyno/
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=.next"
+          - "--exclude=__pycache__"
+
+    - name: Template .env file
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: /opt/krukasyno/.env
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+
+    - name: Build and start VPS2 services
+      community.docker.docker_compose_v2:
+        project_src: /opt/krukasyno
+        files:
+          - docker-compose.vps2.yml
+        state: present
+        build: always
+
+    - name: Wait for player-service health
+      ansible.builtin.uri:
+        url: http://localhost:5000/health
+        status_code: 200
+      retries: 15
+      delay: 10
+      register: result
+      until: result.status == 200
+
+    - name: Wait for wallet-service health
+      ansible.builtin.uri:
+        url: http://localhost:7000/health
+        status_code: 200
+      retries: 15
+      delay: 10
+      register: result
+      until: result.status == 200
+
+    - name: Wait for game-service health
+      ansible.builtin.uri:
+        url: http://localhost:6000/health
+        status_code: 200
+      retries: 15
+      delay: 10
+      register: result
+      until: result.status == 200

@@ -1,0 +1,29 @@
+// This is your Prisma schema file for the Player Service.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  googleId     String?  @unique @map("google_id") @db.VarChar(255)
+  role         Role     @default(USER)
+  isBanned     Boolean  @default(false) @map("is_banned")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+}

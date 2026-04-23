@@ -1,0 +1,130 @@
+version: '3.8'
+
+# ======================================================
+# VPS2 – Private Node
+# Services: player-service, game-service, wallet-service,
+#           mysql, redis
+# NOT directly exposed to the internet.
+# ======================================================
+
+services:
+  player-service:
+    build:
+      context: ./player-service
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/player_db
+      - JWT_SECRET=${JWT_SECRET}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - WALLET_SERVICE_URL=http://wallet-service:7000
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  game-service:
+    build:
+      context: ./game-service
+      dockerfile: Dockerfile
+    ports:
+      - "6100:6100"
+    environment:
+      - PORT=6100
+      - REDIS_URL=redis://redis:6379
+      - PLAYER_SERVICE_URL=http://player-service:5000
+      - WALLET_SERVICE_URL=http://wallet-service:7000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+      player-service:
+        condition: service_healthy
+      wallet-service:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6100/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  wallet-service:
+    build:
+      context: ./wallet-service
+      dockerfile: Dockerfile
+    ports:
+      - "7000:7000"
+    environment:
+      - PORT=7000
+      - DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/wallet_db
+      - REDIS_URL=redis://redis:6379
+      - PLAYER_SERVICE_URL=http://player-service:5000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=player_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - private-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  private-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
