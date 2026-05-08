@@ -6,6 +6,7 @@
     "dev": "ts-node src/index.ts",
     "build": "tsup src/index.ts --format cjs --dts",
     "start": "node dist/index.js",
+    "test": "vitest run",
     "db:push": "prisma db push",
     "db:generate": "prisma generate"
   },
@@ -13,6 +14,7 @@
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
@@ -26,8 +28,11 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "tsup": "^8.0.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }
