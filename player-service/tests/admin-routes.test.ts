@@ -1,46 +1,43 @@
 import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const prismaMock = {
-  $transaction: vi.fn(),
-  user: {
-    findMany: vi.fn(),
-    count: vi.fn(),
-    findUnique: vi.fn(),
-    update: vi.fn(),
+jest.mock("../src/lib/prisma", () => ({
+  prisma: {
+    $transaction: jest.fn(),
+    user: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
   },
-};
-
-vi.mock("../src/lib/prisma", () => ({
-  prisma: prismaMock,
 }));
 
-vi.mock("../src/middleware/auth", async () => {
-  return {
-    authMiddleware: (req: Request, _res: Response, next: NextFunction) => {
-      req.user = {
-        sub: "admin-id",
-        role: "ADMIN",
-        email: "admin@gmail.com",
-      };
+jest.mock("../src/middleware/auth", () => ({
+  authMiddleware: (req: Request, _res: Response, next: NextFunction) => {
+    req.user = {
+      sub: "admin-id",
+      role: "ADMIN",
+      email: "admin@gmail.com",
+    };
 
-      next();
-    },
+    next();
+  },
 
-    requireAdmin: (_req: Request, _res: Response, next: NextFunction) => {
-      next();
-    },
+  requireAdmin: (_req: Request, _res: Response, next: NextFunction) => {
+    next();
+  },
 
-    serviceKeyMiddleware: (
-      _req: Request,
-      _res: Response,
-      next: NextFunction,
-    ) => {
-      next();
-    },
-  };
-});
+  serviceKeyMiddleware: (
+    _req: Request,
+    _res: Response,
+    next: NextFunction,
+  ) => {
+    next();
+  },
+}));
+
+const prismaMock = (jest.requireMock("../src/lib/prisma") as { prisma: any }).prisma;
 
 let app: any;
 
@@ -51,7 +48,7 @@ beforeAll(async () => {
 
 describe("ADMIN ROUTES", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   it("GET /admin/users", async () => {

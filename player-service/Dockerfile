@@ -24,6 +24,7 @@ RUN apk add --no-cache wget openssl
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY prisma.config.ts ./
 COPY package*.json ./
 
 EXPOSE 5000

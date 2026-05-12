@@ -16,6 +16,7 @@ router = APIRouter()
 
 # ── Internal (service-to-service) endpoints ──────────
 
+
 def _verify_service_key(x_service_key: str = Header(..., alias="X-Service-Key")) -> None:
     from ..config import settings
     if x_service_key != settings.service_api_key:
@@ -45,7 +46,8 @@ def debit_wallet(body: DebitRequest, db: Session = Depends(get_db)):
             user_id=body.userId,
             amount=body.amount,
             description=body.description or "Bet",
-            game_session_id=body.gameSessionId if hasattr(body, 'gameSessionId') else None,
+            game_session_id=body.gameSessionId if hasattr(
+                body, 'gameSessionId') else None,
         )
         return {"balance": float(wallet.balance)}
     except ValueError as e:
@@ -60,7 +62,8 @@ def credit_wallet(body: CreditRequest, db: Session = Depends(get_db)):
             user_id=body.userId,
             amount=body.amount,
             description=body.description or "Win",
-            game_session_id=body.gameSessionId if hasattr(body, 'gameSessionId') else None,
+            game_session_id=body.gameSessionId if hasattr(
+                body, 'gameSessionId') else None,
         )
         return {"balance": float(wallet.balance)}
     except ValueError as e:
@@ -85,7 +88,8 @@ def deposit(
     db: Session = Depends(get_db),
 ):
     if body.amount <= 0 or body.amount > 10000:
-        raise HTTPException(status_code=400, detail="Deposit must be between 1 and 10,000")
+        raise HTTPException(
+            status_code=400, detail="Deposit must be between 1 and 10,000")
 
     # Critical validation before financial operation
     ok, msg = validate_player_critical(x_user_id)
@@ -103,7 +107,8 @@ def withdraw(
     db: Session = Depends(get_db),
 ):
     if body.amount <= 0:
-        raise HTTPException(status_code=400, detail="Withdrawal amount must be positive")
+        raise HTTPException(
+            status_code=400, detail="Withdrawal amount must be positive")
 
     ok, msg = validate_player_critical(x_user_id)
     if not ok:

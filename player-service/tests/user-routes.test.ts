@@ -1,21 +1,18 @@
 import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const prismaMock = vi.hoisted(() => ({
-  $transaction: vi.fn(),
-  user: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
+jest.mock("../src/lib/prisma", () => ({
+  prisma: {
+    $transaction: jest.fn(),
+    user: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
   },
 }));
 
-vi.mock("../src/lib/prisma", () => ({
-  prisma: prismaMock,
-}));
-
-vi.mock("../src/middleware/auth", () => ({
+jest.mock("../src/middleware/auth", () => ({
   authMiddleware: (req: Request, _res: Response, next: NextFunction) => {
     req.user = {
       sub: "user-1",
@@ -40,11 +37,13 @@ vi.mock("../src/middleware/auth", () => ({
   },
 }));
 
+const prismaMock = (jest.requireMock("../src/lib/prisma") as { prisma: any }).prisma;
+
 import app from "../src";
 
 describe("USERS ROUTES", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe("GET /users/:id", () => {

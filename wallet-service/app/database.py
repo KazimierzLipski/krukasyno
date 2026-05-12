@@ -2,7 +2,9 @@ import time
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import urlparse
 
+import pymysql
 from sqlalchemy import (
     Column, String, Numeric, Enum, DateTime, ForeignKey, create_engine
 )
@@ -11,6 +13,27 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from .config import settings
 
 Base = declarative_base()
+
+
+def _ensure_database_exists(database_url: str) -> None:
+    """Create the database if it does not already exist."""
+    parsed = urlparse(database_url)
+    db_name = parsed.path.lstrip("/")
+    conn = pymysql.connect(
+        host=parsed.hostname,
+        port=parsed.port or 3306,
+        user=parsed.username,
+        password=parsed.password or "",
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+_ensure_database_exists(settings.database_url)
 
 
 class Wallet(Base):

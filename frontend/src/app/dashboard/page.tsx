@@ -23,7 +23,7 @@ export default function DashboardPage() {
       <p className="text-gray-400 mb-8">Good luck at the tables.</p>
 
       {/* Balance card */}
-      <div className="bg-gradient-to-br from-yellow-400/20 to-yellow-600/10 border border-yellow-400/30 rounded-2xl p-6 mb-8 flex items-center justify-between">
+      <div className="bg-linear-to-br from-yellow-400/20 to-yellow-600/10 border border-yellow-400/30 rounded-2xl p-6 mb-8 flex items-center justify-between">
         <div>
           <p className="text-gray-400 text-sm">Your Balance</p>
           <p className="text-4xl font-black text-yellow-400">

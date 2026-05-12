@@ -1,50 +1,47 @@
 import bcrypt from "bcryptjs";
 import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const prismaMock = {
-  user: {
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
+jest.mock("../src/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
   },
-};
-
-vi.mock("../src/lib/prisma", () => ({
-  prisma: prismaMock,
 }));
 
-vi.mock("../src/lib/jwt", () => ({
-  signToken: vi.fn(() => "mocked-jwt-token"),
+jest.mock("../src/lib/jwt", () => ({
+  signToken: jest.fn(() => "mocked-jwt-token"),
 }));
 
-vi.mock("../src/middleware/auth", async () => {
-  return {
-    authMiddleware: (req: Request, _res: Response, next: NextFunction) => {
-      req.user = {
-        sub: "1",
-        role: "USER",
-        email: "test@test.com",
-      };
+jest.mock("../src/middleware/auth", () => ({
+  authMiddleware: (req: Request, _res: Response, next: NextFunction) => {
+    req.user = {
+      sub: "1",
+      role: "USER",
+      email: "test@test.com",
+    };
 
-      next();
-    },
+    next();
+  },
 
-    requireAdmin: (_req: Request, _res: Response, next: NextFunction) => {
-      next();
-    },
+  requireAdmin: (_req: Request, _res: Response, next: NextFunction) => {
+    next();
+  },
 
-    serviceKeyMiddleware: (
-      _req: Request,
-      _res: Response,
-      next: NextFunction,
-    ) => {
-      next();
-    },
-  };
-});
+  serviceKeyMiddleware: (
+    _req: Request,
+    _res: Response,
+    next: NextFunction,
+  ) => {
+    next();
+  },
+}));
+
+const prismaMock = (jest.requireMock("../src/lib/prisma") as { prisma: any }).prisma;
 
 let app: any;
 
@@ -55,7 +52,7 @@ beforeAll(async () => {
 
 describe("AUTH ROUTES", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe("POST /auth/register", () => {

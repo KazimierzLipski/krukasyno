@@ -1,11 +1,10 @@
 import { config } from "dotenv";
-import { vi } from "vitest";
 
 config({ path: ".env.test" });
 
-global.fetch = vi.fn(() =>
+global.fetch = jest.fn(() =>
   Promise.resolve({
     ok: true,
     json: async () => ({}),
   } as any),
-);
+) as any;

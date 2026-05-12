@@ -59,7 +59,7 @@ export default function WalletPage() {
       <h1 className="text-3xl font-bold mb-6">My Wallet</h1>
 
       {/* Balance */}
-      <div className="bg-gradient-to-br from-yellow-400/20 to-yellow-600/10 border border-yellow-400/30 rounded-2xl p-6 mb-6">
+      <div className="bg-linear-to-br from-yellow-400/20 to-yellow-600/10 border border-yellow-400/30 rounded-2xl p-6 mb-6">
         <p className="text-gray-400 text-sm">Current Balance</p>
         <p className="text-5xl font-black text-yellow-400 mt-1">
           {balance !== null ? balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '…'}

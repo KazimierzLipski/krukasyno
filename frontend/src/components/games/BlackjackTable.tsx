@@ -7,22 +7,46 @@ const SUIT_SYMBOL: Record<string, string> = {
 };
 const RED_SUITS = new Set(['hearts', 'diamonds']);
 
-function PlayingCard({ card }: { card: BlackjackCard }) {
+function PlayingCard({ card, delay = 0, flip = false }: { card: BlackjackCard; delay?: number; flip?: boolean }) {
+  const animStyle = { animationDelay: `${delay}s` };
+  const flipClass = flip ? 'flip' : '';
   if (card.hidden) {
     return (
-      <div className="playing-card face-down w-14 h-20 md:w-16 md:h-24 rounded-lg border-2 border-blue-700 bg-blue-900 flex items-center justify-center text-3xl select-none">
+      <div
+        className={`playing-card face-down ${flipClass} w-14 h-20 md:w-16 md:h-24 rounded-lg border-2 border-blue-700 bg-blue-900 flex items-center justify-center text-3xl select-none`}
+        style={animStyle}
+      >
         🂠
       </div>
     );
   }
   const isRed = RED_SUITS.has(card.suit);
   return (
-    <div className={`playing-card w-14 h-20 md:w-16 md:h-24 rounded-lg text-xs font-bold p-1 ${isRed ? 'red' : ''} flex flex-col justify-between`}>
+    <div
+      className={`playing-card ${flipClass} w-14 h-20 md:w-16 md:h-24 rounded-lg text-xs font-bold p-1 ${isRed ? 'red' : ''} flex flex-col justify-between`}
+      style={animStyle}
+    >
       <div className="leading-none">{card.rank}<br />{SUIT_SYMBOL[card.suit]}</div>
       <div className="text-2xl text-center leading-none">{SUIT_SYMBOL[card.suit]}</div>
       <div className="leading-none self-end rotate-180">{card.rank}<br />{SUIT_SYMBOL[card.suit]}</div>
     </div>
   );
+}
+
+const RANK_VALUE: Record<string, number> = {
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+  '10': 10, 'J': 10, 'Q': 10, 'K': 10, 'A': 11,
+};
+
+function calcDealerScore(cards: BlackjackCard[]): number {
+  let score = 0;
+  let aces = 0;
+  for (const c of cards) {
+    score += RANK_VALUE[c.rank] ?? 0;
+    if (c.rank === 'A') aces++;
+  }
+  while (score > 21 && aces > 0) { score -= 10; aces--; }
+  return score;
 }
 
 const STATUS_MESSAGES: Record<string, { text: string; color: string }> = {
@@ -41,6 +65,44 @@ export function BlackjackTable({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [balance, setBalance] = useState<number | null>(null);
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [dealerShownCount, setDealerShownCount] = useState(0);
+
+  // Schedule dealer score to increment as each card's animation completes
+  useEffect(() => {
+    if (!game?.dealer_hand) { setDealerShownCount(0); return; }
+    setDealerShownCount(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let visible = 0;
+    game.dealer_hand.forEach((card, i) => {
+      if (card.hidden) return;
+      const animDelay = i < 2 ? i * 0.12 : 0.55 + (i - 2) * 0.45;
+      const animDuration = (i === 1) ? 0.40 : 0.35; // flip vs deal
+      const ms = Math.round((animDelay + animDuration) * 1000);
+      visible++;
+      const count = visible;
+      timers.push(setTimeout(() => setDealerShownCount(count), ms));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [
+    game?.dealer_hand?.length,
+    // re-run when hole card flips
+    game?.dealer_hand?.[1]?.hidden,
+  ]);
+
+  // Delay showing the result until all dealer card animations finish
+  useEffect(() => {
+    if (!game) { setStatusVisible(false); return; }
+    const terminal = !['player_turn', 'dealer_turn'].includes(game.status);
+    if (!terminal) { setStatusVisible(false); return; }
+
+    const dealerHitCount = Math.max(0, (game.dealer_hand?.length ?? 2) - 2);
+    const lastCardDelay = dealerHitCount === 0 ? 0 : 0.55 + (dealerHitCount - 1) * 0.45;
+    const totalMs = Math.round((lastCardDelay + 0.4) * 1000);
+
+    const timer = setTimeout(() => setStatusVisible(true), totalMs);
+    return () => clearTimeout(timer);
+  }, [game?.status, game?.dealer_hand?.length]);
 
   const fetchBalance = useCallback(async () => {
     try {
@@ -93,21 +155,39 @@ export function BlackjackTable({ token }: { token: string }) {
         {/* Dealer hand */}
         <div className="mb-6">
           <p className="text-sm text-gray-400 mb-2">
-            Dealer {game ? `(${game.dealer_visible_score})` : ''}
+            Dealer {dealerShownCount > 0
+              ? `(${calcDealerScore((game?.dealer_hand ?? []).filter(c => !c.hidden).slice(0, dealerShownCount))})`
+              : ''}
           </p>
-          <div className="flex gap-2 flex-wrap min-h-[5rem]">
-            {game?.dealer_hand.map((c, i) => <PlayingCard key={i} card={c} />)}
+          <div className="flex gap-2 flex-wrap min-h-[5rem]" style={{ perspective: '600px' }}>
+            {game?.dealer_hand.map((c, i) => {
+              const delay = i < 2 ? i * 0.12 : 0.55 + (i - 2) * 0.45;
+              // key includes hidden so the hole card remounts (and flips) when revealed
+              const isReveal = i === 1 && !c.hidden;
+              return <PlayingCard key={`${i}-${c.hidden}`} card={c} delay={delay} flip={isReveal} />;
+            })}
           </div>
         </div>
 
         {/* Status */}
         {game && (
-          <div className="text-center my-4">
-            <span className={`text-xl font-bold ${STATUS_MESSAGES[game.status]?.color ?? 'text-white'}`}>
-              {STATUS_MESSAGES[game.status]?.text ?? game.status}
-            </span>
-            {isTerminal && game.payout > 0 && (
-              <p className="text-green-400 text-sm mt-1">+{game.payout.toFixed(2)} chips</p>
+          <div className="text-center my-4 min-h-[2rem]">
+            {!isTerminal && (
+              <span className={`text-xl font-bold ${STATUS_MESSAGES[game.status]?.color ?? 'text-white'}`}>
+                {STATUS_MESSAGES[game.status]?.text ?? game.status}
+              </span>
+            )}
+            {isTerminal && (
+              <>
+                <span
+                  className={`text-xl font-bold transition-opacity duration-500 ${STATUS_MESSAGES[game.status]?.color ?? 'text-white'} ${statusVisible ? 'opacity-100' : 'opacity-0'}`}
+                >
+                  {STATUS_MESSAGES[game.status]?.text ?? game.status}
+                </span>
+                {statusVisible && game.payout > 0 && (
+                  <p className="text-green-400 text-sm mt-1">+{game.payout.toFixed(2)} chips</p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -117,8 +197,8 @@ export function BlackjackTable({ token }: { token: string }) {
           <p className="text-sm text-gray-400 mb-2">
             You {game ? `(${game.player_score})` : ''}
           </p>
-          <div className="flex gap-2 flex-wrap min-h-[5rem]">
-            {game?.player_hand.map((c, i) => <PlayingCard key={i} card={c} />)}
+          <div className="flex gap-2 flex-wrap min-h-[5rem]" style={{ perspective: '600px' }}>
+            {game?.player_hand.map((c, i) => <PlayingCard key={i} card={c} delay={i * 0.12} />)}
           </div>
         </div>
 

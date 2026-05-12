@@ -1,3 +1,7 @@
+import path from "path";
+import dotenv from "dotenv";
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -6,6 +10,7 @@ import morgan from "morgan";
 import { adminRouter } from "./routes/admin";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
+
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "5000", 10);

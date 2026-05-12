@@ -1,15 +1,13 @@
-import { vi } from "vitest";
-
 export const prismaMock = {
   user: {
-    create: vi.fn(),
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-    update: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
   },
-  $transaction: vi.fn(),
-  $connect: vi.fn(),
-  $disconnect: vi.fn(),
+  $transaction: jest.fn(),
+  $connect: jest.fn(),
+  $disconnect: jest.fn(),
 };
