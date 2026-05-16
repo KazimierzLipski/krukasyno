@@ -2,9 +2,10 @@
   "name": "player-service",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "ts-node src/index.ts",
-    "build": "tsup src/index.ts --format cjs --dts",
+    "build": "tsup src/index.ts --format esm --dts",
     "start": "node dist/index.js",
     "test": "jest",
     "db:push": "prisma db push",
