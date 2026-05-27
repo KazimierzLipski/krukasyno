@@ -1,6 +1,12 @@
-# KruKasyno — Federated Authentication & Authorization
+﻿# KruKasyno — Federated Authentication & Authorization
 
-## 1. Authentication Flow
+## 1. Authentication Overview
+
+KruKasyno uses a **hybrid authentication model**: credentials-based login for direct sign-up and Google OAuth 2.0 for federated identity. Regardless of the method used, both flows converge at the **Player Service** which is the sole issuer of application-level JWTs. The frontend delegates session management to **next-auth**, which abstracts the OAuth dance and stores the resulting application token in an encrypted HttpOnly cookie.
+
+This design follows the _identity broker_ pattern: the Player Service acts as the internal identity provider (IdP), and Google acts as an external federated IdP. The API Gateway then acts as a pure policy enforcement point (PEP), validating JWTs without any knowledge of how they were obtained.
+
+![Authentication Overview](diagrams/Authentication%20Overview.png)
 
 KruKasyno supports two authentication methods:
 1. **Credentials** (email + password)
@@ -22,9 +28,13 @@ User → POST /api/auth/login (email, password)
 
 The JWT is stored in next-auth's encrypted session cookie (`HttpOnly`, `Secure`, `SameSite=Lax`).
 
+![Credentials Login](diagrams/Credentials%20Login.png)
+
 ---
 
 ## 3. Google OAuth 2.0 Flow
+
+![Google OAuth 2.0 Flow](diagrams/Google%20OAuth%202.0%20Flow.png)
 
 ```
 User clicks "Continue with Google"
@@ -32,9 +42,9 @@ User clicks "Continue with Google"
     ▼
 next-auth redirects → Google OAuth consent screen
     │
-Google returns → authorization code → next-auth
+Google returns → authorization code → next-auth callback
     │
-next-auth exchanges code for Google tokens
+next-auth exchanges code → Google access token + id_token
     │
 next-auth signIn callback → POST /api/auth/google
     │  { googleId, email, name }
@@ -42,14 +52,22 @@ next-auth signIn callback → POST /api/auth/google
 API Gateway → Player Service /auth/google
     │
 Player Service:
-  - If user with googleId exists → return existing user
-  - If user with email exists → link Google account
-  - Otherwise → create new user, create wallet
+  ├── If user with googleId exists → return existing user
+  ├── If user with email exists → link Google account to existing record
+  └── Otherwise → create new user + provision wallet (Wallet Service)
     │
-Player Service issues application JWT
+Player Service issues application JWT (HS256)
     ▼
-JWT returned to next-auth → stored in session cookie
+JWT returned to next-auth → stored in encrypted session cookie
 ```
+
+### Google Account Linking Logic
+
+| Condition | Action |
+|---|---|
+| `googleId` matches existing record | Sign in to existing account |
+| `email` matches existing account (no `googleId`) | Link Google identity to existing account |
+| No match found | Create new account + provision wallet |
 
 ### Google OAuth Configuration
 
@@ -73,9 +91,17 @@ JWT returned to next-auth → stored in session cookie
 }
 ```
 
+| Claim | Description |
+|---|---|
+| `sub` | User UUID (primary identifier across all services) |
+| `email` | User email address |
+| `role` | `USER` or `ADMIN` |
+| `iat` | Issued-at timestamp |
+| `exp` | Expiry timestamp (24 h after issuance) |
+
 - **Algorithm**: HS256
 - **Expiry**: 24 hours
-- **Secret**: `JWT_SECRET` env variable (shared between Player Service and API Gateway)
+- **Secret**: `JWT_SECRET` env variable (shared between Player Service and API Gateway; minimum 64 random characters)
 
 ---
 
@@ -86,34 +112,44 @@ JWT returned to next-auth → stored in session cookie
 | `USER` | Play games, manage own wallet, view own profile |
 | `ADMIN` | All USER permissions + list/ban/unban users, change roles |
 
-### JWT Validation
+### JWT Validation at API Gateway
 
-1. Browser sends: `Authorization: Bearer <JWT>`
-2. API Gateway validates signature and expiry using `JWT_SECRET`
-3. Extracts `sub` (user ID) and `role`
-4. Injects `X-User-Id` and `X-User-Role` headers before forwarding to services
+![JWT Validation at API Gateway](diagrams/JWT%20Validation%20at%20API%20Gateway.png)
+
+1. Browser sends request with `Authorization: Bearer <JWT>`
+2. API Gateway verifies signature using `JWT_SECRET`
+3. Checks `exp` claim — rejects expired tokens with `401 Unauthorized`
+4. Extracts `sub` (user ID) and `role`
+5. For admin routes, checks `role === ADMIN` — rejects with `403 Forbidden` if not
+6. Injects `X-User-Id` and `X-User-Role` headers and forwards request to the target service
 
 ### Service-to-Service Auth
 
-Internal service calls use `X-Service-Key: <SERVICE_API_KEY>` header. This key is shared between all VPS2 services and is never exposed publicly.
+Internal service calls (Game Service → Wallet Service, etc.) use `X-Service-Key: <SERVICE_API_KEY>` header. This key is shared exclusively between all VPS2 services and is never exposed through the public API.
 
 ---
 
 ## 6. Session Management (next-auth)
 
-- Strategy: `jwt` (stateless, no database required)
-- Session cookie: encrypted, `HttpOnly`, signed with `NEXTAUTH_SECRET`
+- Strategy: `jwt` (stateless — no server-side session database required)
+- Session cookie: encrypted with `NEXTAUTH_SECRET`, `HttpOnly`, `Secure`, `SameSite=Lax`
 - The session stores:
-  - `applicationToken` — the Player Service JWT for API calls
+  - `applicationToken` — the full Player Service JWT used for all API calls
   - `user.id`, `user.role`, `user.username`
-- Session TTL: 24 hours
+- Session TTL: 24 hours (matches JWT expiry)
+
+The next-auth `jwt` callback enriches the session with the application JWT received from the Player Service. The next-auth `session` callback exposes the required fields to the frontend client.
 
 ---
 
 ## 7. Security Considerations
 
-- Passwords hashed with `bcrypt` (cost factor 12)
-- JWTs signed with `HS256`, secret ≥ 64 random characters
-- Rate limiting on auth endpoints (NGINX + API Gateway)
-- `X-Service-Key` never exposed through public API
-- Google OAuth tokens are never persisted; only the derived application JWT is stored
+| Control | Implementation |
+|---|---|
+| Password storage | `bcrypt` with cost factor 12 |
+| JWT signing | HS256 with secret ≥ 64 random characters |
+| Session cookie | `HttpOnly`, `Secure`, `SameSite=Lax`, encrypted with `NEXTAUTH_SECRET` |
+| Rate limiting | NGINX + API Gateway middleware on `/auth/*` endpoints |
+| Service key isolation | `X-Service-Key` is VPS2-internal only; never forwarded from API Gateway to client |
+| Google token handling | Google `access_token` and `id_token` are never persisted; only the derived application JWT is stored |
+| HTTPS enforcement | All external traffic served over TLS via NGINX; HTTP redirected to HTTPS |

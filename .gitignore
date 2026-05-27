@@ -4,3 +4,4 @@
 **/.pytest_cache/
 wallet-service/test.db
 **/node_modules/
+/node
